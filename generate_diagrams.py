@@ -441,6 +441,10 @@ def main():
     parser.add_argument('--out', default='circle_cuttings.png')
     parser.add_argument('--choices', type=str, nargs='+',
                         help='specific choice strings to run, e.g. LLLLLLLL RLRL')
+    parser.add_argument('--sample', type=int, metavar='N',
+                        help='randomly sample N configurations per n value instead of all')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='random seed for --sample (for reproducibility)')
     parser.add_argument('--no-shading', action='store_true', help='disable area shading')
     parser.add_argument('--no-labels', action='store_true', help='disable area number labels')
     parser.add_argument('--no-circle', action='store_true', help='omit the circle outline')
@@ -466,9 +470,15 @@ def main():
                 print("OK")
                 results.append((sections, cuts, label))
     else:
+        import random
+        rng = random.Random(args.seed)
         for n in sorted(args.n):
             seqs = all_choice_sequences(n)
-            print(f"\nn={n}: {len(seqs)} configuration(s) to try")
+            if args.sample and len(seqs) > args.sample:
+                seqs = rng.sample(seqs, args.sample)
+                print(f"\nn={n}: sampling {args.sample} of {2**max(0,n-3)} configurations")
+            else:
+                print(f"\nn={n}: {len(seqs)} configuration(s) to try")
             for choices in seqs:
                 label_short = f"n={n} [{''.join('R' if c else 'L' for c in choices) or '-'}]"
                 print(f"  {label_short} ... ", end='', flush=True)
