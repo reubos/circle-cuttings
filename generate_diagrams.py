@@ -130,30 +130,9 @@ def _extract_pts(geom):
     return pts
 
 
-def chord_segment(remaining, p1, ep):
-    """
-    Find the actual drawn segment for a cut from p1 toward ep within remaining.
-    draw_start = p1 (cur_pt is already on the boundary).
-    draw_end   = intersection of the line with remaining.exterior closest to ep.
-    """
-    p1a  = np.asarray(p1,  float)
-    epa  = np.asarray(ep,  float)
-    v = epa - p1a
-    nv = np.linalg.norm(v)
-    if nv < 1e-12:
-        return p1, ep
-    v /= nv
-    long_line = LineString([(p1a - 100 * v).tolist(), (p1a + 100 * v).tolist()])
-    try:
-        inter = long_line.intersection(remaining.exterior)
-        if not inter.is_empty:
-            pts = _extract_pts(inter)
-            if pts:
-                closest = min(pts, key=lambda pt: float(np.linalg.norm(pt - epa)))
-                return p1, tuple(closest)
-    except Exception:
-        pass
-    return p1, ep
+def draw_segment(remaining, p1, ep):
+    """Return the draw segment for a cut: always p1→ep (solver endpoints are correct)."""
+    return [(p1, ep)]
 
 
 def _chord_on_boundary(poly, ea, eb, tol=1e-3):
@@ -272,8 +251,8 @@ def run_sequential(n, choices, initial_angle=0.0):
     right, left = oriented_split(remaining, cur_pt, ep)
     if right is None:
         return None, None, "cut 1: split failed"
-    ds, de = chord_segment(remaining, cur_pt, ep)
-    sections.append(right); cuts.append((cur_pt, ep)); draw_cuts.append((ds, de))
+    draw_cuts.append(draw_segment(remaining, cur_pt, ep))
+    sections.append(right); cuts.append((cur_pt, ep))
     remaining = left; cur_pt = ep; arc_lo = sol
 
     # ── middle cuts (cuts 2 … n-2) ────────────────────────────────────────────
@@ -284,10 +263,9 @@ def run_sequential(n, choices, initial_angle=0.0):
         if result is None:
             return None, None, f"cut {i+2}: {'right' if is_right else 'left'} infeasible"
         ep, section, new_remaining, arc_update = result
-        ds, de = chord_segment(remaining, cur_pt, ep)
+        draw_cuts.append(draw_segment(remaining, cur_pt, ep))
         sections.append(section)
         cuts.append((cur_pt, ep))
-        draw_cuts.append((ds, de))
         remaining = new_remaining
         cur_pt = ep
         if arc_update is not None:
@@ -318,11 +296,11 @@ def run_sequential(n, choices, initial_angle=0.0):
                     break
         if ep is None:
             return None, None, f"cut {n-1}: last cut infeasible"
-        ds, de = chord_segment(remaining, cur_pt, ep)
         right, left = oriented_split(remaining, cur_pt, ep)
         if right is None:
             return None, None, f"cut {n-1}: split failed"
-        sections.append(right); cuts.append((cur_pt, ep)); draw_cuts.append((ds, de))
+        draw_cuts.append(draw_segment(remaining, cur_pt, ep))
+        sections.append(right); cuts.append((cur_pt, ep))
         sections.append(left)
     else:
         sections.append(remaining)
@@ -385,9 +363,10 @@ def draw_config(ax, sections, cuts, title='', shading=True, labels=True, circle=
             if patch:
                 ax.add_patch(patch)
 
-    for p1, p2 in cuts:
-        ax.plot([p1[0], p2[0]], [p1[1], p2[1]],
-                color=EDGE_COL, lw=2, zorder=3)
+    for seg_list in cuts:
+        for p1, p2 in seg_list:
+            ax.plot([p1[0], p2[0]], [p1[1], p2[1]],
+                    color=EDGE_COL, lw=2, zorder=3)
 
     if labels:
         for i, sec in enumerate(sections):
@@ -402,30 +381,98 @@ def draw_config(ax, sections, cuts, title='', shading=True, labels=True, circle=
         ax.set_title(title, fontsize=9, pad=5, color='#1a1a2e',
                      fontfamily='monospace')
 
+# ── choice string parser ──────────────────────────────────────────────────────
+
+def _expand_choices(s):
+    """
+    Expand a compact choice string into a plain R/L string.
+
+    Supported syntax:
+      R, L          — single letter
+      R3, L2        — letter repeated N times
+      RL2, LR3      — run of letters repeated N times (no parens needed for simple runs)
+      (LR)3         — parenthesised group repeated N times
+      Combinations  — e.g. L3(RL)2R
+
+    Examples:
+      'L3R2'    -> 'LLLRR'
+      '(LR)3'   -> 'LRLRLR'
+      'R2(LR)2' -> 'RRLRLR'
+    """
+    import re
+    s = s.upper()
+    result = []
+    i = 0
+    while i < len(s):
+        if s[i] == '(':
+            # find matching ')'
+            j = s.index(')', i)
+            group = s[i+1:j]
+            i = j + 1
+            # optional repeat count
+            m = re.match(r'(\d+)', s[i:])
+            count = int(m.group(1)) if m else 1
+            if m:
+                i += len(m.group(1))
+            result.append(group * count)
+        elif s[i] in 'RL':
+            # single letter, then optional repeat count
+            letter = s[i]
+            i += 1
+            m = re.match(r'(\d+)', s[i:])
+            count = int(m.group(1)) if m else 1
+            if m:
+                i += len(m.group(1))
+            result.append(letter * count)
+        else:
+            i += 1  # skip unknown chars
+    return ''.join(result)
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--n', type=int, nargs='+', default=[2, 3, 4, 5])
     parser.add_argument('--out', default='circle_cuttings.png')
+    parser.add_argument('--choices', type=str, nargs='+',
+                        help='specific choice strings to run, e.g. LLLLLLLL RLRL')
     parser.add_argument('--no-shading', action='store_true', help='disable area shading')
     parser.add_argument('--no-labels', action='store_true', help='disable area number labels')
     parser.add_argument('--no-circle', action='store_true', help='omit the circle outline')
     args = parser.parse_args()
 
     results = []
-    for n in sorted(args.n):
-        seqs = all_choice_sequences(n)
-        print(f"\nn={n}: {len(seqs)} configuration(s) to try")
-        for choices in seqs:
+
+    if args.choices:
+        # Build (n, choices) pairs directly from the choice strings
+        todo = []
+        for s in args.choices:
+            expanded = _expand_choices(s)
+            n = len(expanded) + 3
+            choices = tuple(ch == 'R' for ch in expanded)
+            todo.append((n, choices))
+        for n, choices in todo:
             label_short = f"n={n} [{''.join('R' if c else 'L' for c in choices) or '-'}]"
-            print(f"  {label_short} ... ", end='', flush=True)
+            print(f"\n{label_short} ... ", end='', flush=True)
             sections, cuts, label = run_sequential(n, list(choices))
             if sections is None:
                 print(f"skip ({cuts})")
             else:
                 print("OK")
                 results.append((sections, cuts, label))
+    else:
+        for n in sorted(args.n):
+            seqs = all_choice_sequences(n)
+            print(f"\nn={n}: {len(seqs)} configuration(s) to try")
+            for choices in seqs:
+                label_short = f"n={n} [{''.join('R' if c else 'L' for c in choices) or '-'}]"
+                print(f"  {label_short} ... ", end='', flush=True)
+                sections, cuts, label = run_sequential(n, list(choices))
+                if sections is None:
+                    print(f"skip ({cuts})")
+                else:
+                    print("OK")
+                    results.append((sections, cuts, label))
 
     if not results:
         print("No feasible configurations found.")
