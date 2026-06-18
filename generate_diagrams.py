@@ -131,7 +131,37 @@ def _extract_pts(geom):
 
 
 def draw_segment(remaining, p1, ep):
-    """Return the draw segment for a cut: always p1→ep (solver endpoints are correct)."""
+    """Return the draw segment for a cut.
+
+    When ep is on remaining's boundary (all middle cuts, most last cuts) draw
+    p1→ep directly.  When ep is an arc point outside remaining (can happen on
+    the last cut which skips the boundary check so the split still works),
+    find the actual exit of the infinite line on remaining's exterior instead.
+    """
+    p1a = np.asarray(p1, float)
+    epa = np.asarray(ep, float)
+    v = epa - p1a
+    nv = np.linalg.norm(v)
+    if nv < 1e-12:
+        return [(p1, ep)]
+    v /= nv
+
+    if remaining.exterior.distance(Point(epa.tolist())) < 0.05:
+        return [(p1, ep)]
+
+    # ep is off the boundary — find where the ray from p1 through ep exits remaining
+    ray = LineString([p1a.tolist(), (p1a + 100 * v).tolist()])
+    try:
+        inter = ray.intersection(remaining.exterior)
+        pts = _extract_pts(inter)
+        forward = [(pt, float(np.dot(pt - p1a, v)))
+                   for pt in pts if float(np.dot(pt - p1a, v)) > 1e-4]
+        if forward:
+            far_pt = max(forward, key=lambda x: x[1])[0]
+            return [(p1, tuple(far_pt))]
+    except Exception:
+        pass
+
     return [(p1, ep)]
 
 
