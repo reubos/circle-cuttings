@@ -30,7 +30,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import PathPatch
 from matplotlib.path import Path as MplPath
-from shapely.geometry import Polygon, LineString
+from shapely.geometry import Polygon, LineString, Point
 from shapely.ops import split as geo_split
 from scipy.optimize import brentq
 
@@ -215,9 +215,13 @@ def run_sequential(n, choices, initial_angle=0.0):
                 sol = find_arc_end(remaining, cur_pt, right_target, lo, hi)
                 if sol is not None:
                     ep = arc_pt(sol % (2 * np.pi))
-                    r, l = oriented_split(remaining, cur_pt, ep)
-                    if r is not None and abs(r.area - T) < 1e-3:
-                        return ep, r, l, ('lo', sol)
+                    # Only accept arc result if ep is actually on remaining's boundary.
+                    # If the arc was consumed by a prior chord cut, ep is outside/inside
+                    # remaining and using it would corrupt cur_pt for future cuts.
+                    if remaining.exterior.distance(Point(ep)) < 0.05:
+                        r, l = oriented_split(remaining, cur_pt, ep)
+                        if r is not None and abs(r.area - T) < 1e-3:
+                            return ep, r, l, ('lo', sol)
             for ea, eb in chord_edges(remaining):
                 ep = _try_edge(remaining, cur_pt, ea, eb, right_target)
                 if ep is not None:
@@ -237,9 +241,10 @@ def run_sequential(n, choices, initial_angle=0.0):
                 sol = find_arc_end(remaining, cur_pt, right_target, lo, hi)
                 if sol is not None:
                     ep = arc_pt(sol % (2 * np.pi))
-                    r, l = oriented_split(remaining, cur_pt, ep)
-                    if l is not None and abs(l.area - T) < 1e-3:
-                        return ep, l, r, ('hi', sol)
+                    if remaining.exterior.distance(Point(ep)) < 0.05:
+                        r, l = oriented_split(remaining, cur_pt, ep)
+                        if l is not None and abs(l.area - T) < 1e-3:
+                            return ep, l, r, ('hi', sol)
         return None
 
     # ── cut 1: always arc→arc, right piece = T ────────────────────────────────
@@ -282,7 +287,7 @@ def run_sequential(n, choices, initial_angle=0.0):
     if n >= 3:
         right_target = T  # remaining.area == 2T, so right == left == T
         ep = None
-        # Search full arc range — NaN-skipping handles arcs not on remaining boundary
+        # Search full arc range — no boundary check needed (last cut, no future cur_pt)
         sol = find_arc_end(remaining, cur_pt, right_target,
                            initial_angle + 0.01, initial_angle + 2 * np.pi - 0.001)
         if sol is not None:
