@@ -237,7 +237,7 @@ def run_sequential(n, choices, initial_angle=0.0):
         """
         if section_is_right:
             # RIGHT: try arc first (advances arc_lo), then chord edges of remaining
-            lo, hi = arc_lo + 0.01, arc_hi - 0.001
+            lo, hi = arc_lo + 0.001, arc_hi - 0.001
             if hi > lo:
                 sol = find_arc_end(remaining, cur_pt, right_target, lo, hi)
                 if sol is not None:
@@ -263,7 +263,7 @@ def run_sequential(n, choices, initial_angle=0.0):
                     r, l = oriented_split(remaining, cur_pt, ep)
                     if l is not None and abs(l.area - T) < 1e-3:
                         return ep, l, r, None
-            lo, hi = arc_lo + 0.01, arc_hi - 0.001
+            lo, hi = arc_lo + 0.001, arc_hi - 0.001
             if hi > lo:
                 sol = find_arc_end(remaining, cur_pt, right_target, lo, hi)
                 if sol is not None:
@@ -275,7 +275,7 @@ def run_sequential(n, choices, initial_angle=0.0):
         return None
 
     # ── cut 1: always arc→arc, right piece = T ────────────────────────────────
-    lo, hi = arc_lo + 0.01, arc_hi - 0.001
+    lo, hi = arc_lo + 0.001, arc_hi - 0.001
     sol = find_arc_end(remaining, cur_pt, T, lo, hi)
     if sol is None:
         return None, None, "cut 1: arc→arc infeasible"
@@ -316,7 +316,7 @@ def run_sequential(n, choices, initial_angle=0.0):
         ep = None
         # Search full arc range — no boundary check needed (last cut, no future cur_pt)
         sol = find_arc_end(remaining, cur_pt, right_target,
-                           initial_angle + 0.01, initial_angle + 2 * np.pi - 0.001)
+                           initial_angle + 0.001, initial_angle + 2 * np.pi - 0.001)
         if sol is not None:
             ep = arc_pt(sol % (2 * np.pi))
             step_labels.append('arc')
