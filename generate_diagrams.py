@@ -130,39 +130,36 @@ def _extract_pts(geom):
     return pts
 
 
-def draw_segment(remaining, p1, ep):
-    """Return the draw segment for a cut.
+def _as_linestrings(geom):
+    """Yield every LineString contained in a Shapely geometry."""
+    if geom is None or geom.is_empty:
+        return
+    if geom.geom_type == 'LineString':
+        yield geom
+    elif geom.geom_type == 'MultiLineString':
+        yield from geom.geoms
+    elif hasattr(geom, 'geoms'):
+        for g in geom.geoms:
+            yield from _as_linestrings(g)
 
-    When ep is on remaining's boundary (all middle cuts, most last cuts) draw
-    p1→ep directly.  When ep is an arc point outside remaining (can happen on
-    the last cut which skips the boundary check so the split still works),
-    find the actual exit of the infinite line on remaining's exterior instead.
+
+def draw_segment(piece_a, piece_b):
+    """Return the actual cut: the boundary shared between the two split pieces.
+
+    This is exactly the chord that was cut.  Both endpoints lie on the polygon
+    boundary because they come from the split geometry itself — we never rely
+    on ep, which is only an arc point used to define the cut's angle and may sit
+    outside the polygon when its arc has been consumed by earlier cuts.
     """
-    p1a = np.asarray(p1, float)
-    epa = np.asarray(ep, float)
-    v = epa - p1a
-    nv = np.linalg.norm(v)
-    if nv < 1e-12:
-        return [(p1, ep)]
-    v /= nv
-
-    if remaining.exterior.distance(Point(epa.tolist())) < 0.05:
-        return [(p1, ep)]
-
-    # ep is off the boundary — find where the ray from p1 through ep exits remaining
-    ray = LineString([p1a.tolist(), (p1a + 100 * v).tolist()])
-    try:
-        inter = ray.intersection(remaining.exterior)
-        pts = _extract_pts(inter)
-        forward = [(pt, float(np.dot(pt - p1a, v)))
-                   for pt in pts if float(np.dot(pt - p1a, v)) > 1e-4]
-        if forward:
-            far_pt = max(forward, key=lambda x: x[1])[0]
-            return [(p1, tuple(far_pt))]
-    except Exception:
-        pass
-
-    return [(p1, ep)]
+    if piece_a is None or piece_b is None:
+        return []
+    shared = piece_a.intersection(piece_b)
+    segs = []
+    for line in _as_linestrings(shared):
+        coords = list(line.coords)
+        for i in range(len(coords) - 1):
+            segs.append((coords[i], coords[i + 1]))
+    return segs
 
 
 def _chord_on_boundary(poly, ea, eb, tol=1e-3):
@@ -286,7 +283,7 @@ def run_sequential(n, choices, initial_angle=0.0):
     right, left = oriented_split(remaining, cur_pt, ep)
     if right is None:
         return None, None, "cut 1: split failed"
-    draw_cuts.append(draw_segment(remaining, cur_pt, ep))
+    draw_cuts.append(draw_segment(right, left))
     sections.append(right); cuts.append((cur_pt, ep))
     remaining = left; cur_pt = ep; arc_lo = sol
 
@@ -298,7 +295,7 @@ def run_sequential(n, choices, initial_angle=0.0):
         if result is None:
             return None, None, f"cut {i+2}: {'right' if is_right else 'left'} infeasible"
         ep, section, new_remaining, arc_update = result
-        draw_cuts.append(draw_segment(remaining, cur_pt, ep))
+        draw_cuts.append(draw_segment(section, new_remaining))
         sections.append(section)
         cuts.append((cur_pt, ep))
         remaining = new_remaining
@@ -334,7 +331,7 @@ def run_sequential(n, choices, initial_angle=0.0):
         right, left = oriented_split(remaining, cur_pt, ep)
         if right is None:
             return None, None, f"cut {n-1}: split failed"
-        draw_cuts.append(draw_segment(remaining, cur_pt, ep))
+        draw_cuts.append(draw_segment(right, left))
         sections.append(right); cuts.append((cur_pt, ep))
         sections.append(left)
     else:
