@@ -112,7 +112,11 @@ def find_edge_end(poly, p1, ea, eb, right_target):
         p2 = edge_pt(ea, eb, t)
         right, _ = oriented_split(poly, p1, p2)
         return np.nan if right is None else right.area - right_target
-    sol = _root(f, 0.005, 0.995)
+    # Range mirrors the arc margin (0.001).  As n grows, T = circle/n shrinks and
+    # valid endpoints land ever closer to a vertex; a tighter clamp would exclude
+    # them (in both ea->eb and eb->ea directions).  Near-vertex noise is still
+    # rejected downstream by the abs(area - T) check, so widening is safe.
+    sol = _root(f, 0.001, 0.999)
     return None if sol is None else edge_pt(ea, eb, sol)
 
 def _extract_pts(geom):
