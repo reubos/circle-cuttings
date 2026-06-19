@@ -87,6 +87,10 @@
           <input id="seedInput" type="number" value="" placeholder="random">
         </div>
       </div>
+      <div class="field">
+        <label>Max cards <span class="hint">auto-sample above this</span></label>
+        <input id="maxCardsInput" type="number" value="200" min="1">
+      </div>
     </div>
 
     <div class="group">
@@ -421,7 +425,6 @@ function compositeSVG(results, opts){
 // ════════════════════════════════════════════════════════════════════════════
 const $ = id => document.getElementById(id);
 let currentResults=[], currentOpts={shading:true,labels:true,circle:true};
-const CAP = 200;
 
 function readOpts(){
   return { shading:$('optShading').checked, cuts:$('optCuts').checked,
@@ -440,6 +443,7 @@ function buildConfigList(){
                   .map(Number).filter(x=>Number.isFinite(x)&&x>=2 && x<=2000);
   const sampleV = parseInt($('sampleInput').value,10);
   const seedV = parseInt($('seedInput').value,10);
+  const CAP = Math.max(1, parseInt($('maxCardsInput').value,10) || 200);
   const rng = mulberry32(Number.isFinite(seedV) ? seedV : (Math.random()*2**31|0));
   let list=[], warn=null;
   for(const n of nvals){
