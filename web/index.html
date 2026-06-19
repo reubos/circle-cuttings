@@ -12,9 +12,34 @@
   * { box-sizing:border-box; }
   body { margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
          color:var(--edge); background:var(--bg); }
-  header.top { padding:18px 24px; background:var(--panel); border-bottom:1px solid var(--line); }
+  header.top { padding:18px 24px; background:var(--panel); border-bottom:1px solid var(--line);
+               display:flex; align-items:center; justify-content:space-between; gap:16px; }
   header.top h1 { margin:0; font-size:20px; font-weight:700; }
   header.top p  { margin:4px 0 0; font-size:13px; color:var(--muted); }
+  .help-btn { flex:0 0 auto; width:34px; height:34px; border-radius:50%; border:1px solid var(--accent);
+              background:#fff; color:var(--accent); font-size:18px; font-weight:700; cursor:pointer;
+              line-height:1; }
+  .help-btn:hover { background:var(--accent); color:#fff; }
+
+  dialog.help { max-width:560px; width:calc(100% - 40px); border:1px solid var(--line);
+                border-radius:12px; padding:0; color:var(--edge);
+                box-shadow:0 12px 40px rgba(0,0,0,.25); }
+  dialog.help::backdrop { background:rgba(20,28,38,.45); }
+  dialog.help .hd { display:flex; align-items:center; justify-content:space-between;
+                    padding:16px 20px; border-bottom:1px solid var(--line); }
+  dialog.help .hd h2 { margin:0; font-size:17px; }
+  dialog.help .bd { padding:18px 20px; font-size:13.5px; line-height:1.5; max-height:65vh; overflow-y:auto; }
+  dialog.help .bd h3 { font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+                       color:var(--muted); margin:18px 0 6px; }
+  dialog.help .bd h3:first-child { margin-top:0; }
+  dialog.help .bd p { margin:0 0 10px; }
+  dialog.help .bd ul { margin:0 0 10px; padding-left:18px; }
+  dialog.help .bd li { margin:3px 0; }
+  dialog.help code { font-family:ui-monospace,Menlo,Consolas,monospace; background:#eef1f4;
+                     padding:1px 5px; border-radius:4px; font-size:12.5px; }
+  dialog.help .close { border:0; background:transparent; font-size:22px; line-height:1;
+                       cursor:pointer; color:var(--muted); }
+  dialog.help .close:hover { color:var(--edge); }
 
   .layout { display:flex; align-items:flex-start; }
 
@@ -61,9 +86,55 @@
 <body>
 
 <header class="top">
-  <h1>Equal-Area Circle Cutting</h1>
-  <p>Sequential configurations &mdash; each cut starts where the previous ended, every section has equal area.</p>
+  <div>
+    <h1>Equal-Area Circle Cutting</h1>
+    <p>Sequential configurations &mdash; each cut starts where the previous ended, every section has equal area.</p>
+  </div>
+  <button class="help-btn" id="helpBtn" title="About this page" aria-label="Help">?</button>
 </header>
+
+<dialog class="help" id="helpDialog">
+  <div class="hd">
+    <h2>About this page</h2>
+    <button class="close" id="helpClose" aria-label="Close">&times;</button>
+  </div>
+  <div class="bd">
+    <p>Each diagram shows a circle cut into <strong>n equal-area pieces</strong> by a sequence of
+       straight cuts, where every cut <strong>starts exactly where the previous one ended</strong>.</p>
+
+    <h3>R / L configurations</h3>
+    <p>The first and last cuts are fixed. At each cut in between you choose to keep the piece on the
+       <strong>R</strong>ight or the <strong>L</strong>eft, so a string like <code>RLLR</code> names one
+       configuration. For a given n there are <code>2^(n-3)</code> distinct configurations.</p>
+
+    <h3>Configuration controls</h3>
+    <ul>
+      <li><strong>n values</strong> — one or more sizes, space-separated (e.g. <code>6 7 8</code>).
+          Generates every configuration for each n.</li>
+      <li><strong>Choices</strong> — show specific configurations instead. Accepts shorthand:
+          <code>L3R2</code> = <code>LLLRR</code>, <code>(LR)3</code> = <code>LRLRLR</code>. Overrides n.</li>
+      <li><strong>Sample</strong> / <strong>Seed</strong> — show N random configurations per n; the seed
+          makes the random pick reproducible.</li>
+      <li><strong>Max cards</strong> — if an n has more configurations than this, it auto-samples that
+          many at random (so the browser isn't asked to draw thousands at once).</li>
+    </ul>
+
+    <h3>Display</h3>
+    <ul>
+      <li><strong>Shading</strong> — fill sections with colour. Adjacent sections always get different
+          colours.</li>
+      <li><strong>Cut lines</strong> — draw the black cut segments.</li>
+      <li><strong>Labels</strong> — number each section in cut order.</li>
+      <li><strong>Circle outline</strong> — draw the outer circle.</li>
+      <li><strong>Card size</strong> — minimum width of each diagram in the grid.</li>
+    </ul>
+
+    <h3>Export</h3>
+    <p>Set a <strong>filename</strong>, then <strong>Download PNG</strong> (raster, with a scale
+       multiplier for resolution) or <strong>Download SVG</strong> (vector, scales infinitely). The saved
+       image matches exactly what's shown.</p>
+  </div>
+</dialog>
 
 <div class="layout">
   <aside class="controls">
@@ -533,6 +604,12 @@ function downloadPNG(){
   img.onerror=()=>{ URL.revokeObjectURL(url); alert('PNG render failed.'); };
   img.src=url;
 }
+
+// help dialog
+const helpDlg=$('helpDialog');
+$('helpBtn').addEventListener('click', ()=>helpDlg.showModal());
+$('helpClose').addEventListener('click', ()=>helpDlg.close());
+helpDlg.addEventListener('click', e=>{ if(e.target===helpDlg) helpDlg.close(); });  // backdrop click
 
 $('genBtn').addEventListener('click', generate);
 $('pngBtn').addEventListener('click', downloadPNG);
