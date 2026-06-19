@@ -173,26 +173,38 @@ def section_adjacency(sections):
                 adj[i].add(j); adj[j].add(i)
     return adj
 REDUCED = ['#AED6F1','#A9DFBF','#F9E79F','#F5CBA7','#D7BDE2','#FADBD8']
+def _corner_adj(sections):
+    def vkey(p): return (round(p[0], 4), round(p[1], 4))
+    cv = [set(vkey(a) for e in cutEdges(s) for a in e) for s in sections]
+    adj = [set() for _ in sections]
+    for i in range(len(sections)):
+        for j in range(i+1, len(sections)):
+            if cv[i] & cv[j]: adj[i].add(j); adj[j].add(i)
+    return adj
 def section_colors(sections):
-    adj = section_adjacency(sections)
+    hard = section_adjacency(sections)              # edge-sharing (hard)
+    soft = _corner_adj(sections)                    # corner-touch (soft preference)
     S = len(sections); P = len(REDUCED)
     col = [-1]*S
-    for i in range(S):                              # pass 1: lowest-index
-        forb = {col[j] for j in adj[i] if col[j] >= 0}
+    for i in range(S):                              # pass 1: lowest-index on hard
+        forb = {col[j] for j in hard[i] if col[j] >= 0}
         c = 0
         while c in forb: c += 1
         col[i] = c
-    for _ in range(4):                              # pass 2: least-used refinement
+    for _ in range(6):                              # pass 2: hard forbid + soft prefer + least-used
         use = [0]*P
         for c in col:
             if c < P: use[c] += 1
         for i in range(S):
-            forb = {col[j] for j in adj[i]}
-            best = col[i]
+            hforb = {col[j] for j in hard[i]}
+            sforb = {col[j] for j in soft[i]}
+            best, bestkey = -1, (9, float('inf'))
             for c in range(P):
-                if c not in forb and use[c] < use[best]: best = c
+                if c in hforb: continue
+                k = (1 if c in sforb else 0, use[c])
+                if k < bestkey: best, bestkey = c, k
             use[col[i]] -= 1; col[i] = best; use[best] += 1
-    return col, adj
+    return col, hard
 
 def _true_adj(sec):
     """Ground-truth adjacency via Shapely shared-boundary length (not the JS method)."""
