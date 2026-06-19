@@ -20,6 +20,9 @@
               background:#fff; color:var(--accent); font-size:18px; font-weight:700; cursor:pointer;
               line-height:1; }
   .help-btn:hover { background:var(--accent); color:#fff; }
+  .back-link { display:inline-block; margin-bottom:6px; font-size:12.5px; font-weight:600;
+               color:var(--muted); text-decoration:none; }
+  .back-link:hover { color:var(--accent); text-decoration:underline; }
 
   dialog.help { max-width:560px; width:calc(100% - 40px); border:1px solid var(--line);
                 border-radius:12px; padding:0; color:var(--edge);
@@ -87,6 +90,7 @@
 
 <header class="top">
   <div>
+    <a class="back-link" href="../">&larr; reubo's games &amp; tools</a>
     <h1>Equal-Area Circle Cutting</h1>
     <p>Sequential configurations &mdash; each cut starts where the previous ended, every section has equal area.</p>
   </div>
