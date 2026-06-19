@@ -40,6 +40,10 @@
   dialog.help .close { border:0; background:transparent; font-size:22px; line-height:1;
                        cursor:pointer; color:var(--muted); }
   dialog.help .close:hover { color:var(--edge); }
+  .rl-ex { display:flex; gap:16px; justify-content:center; margin:4px 0 12px; }
+  .rl-ex figure { margin:0; text-align:center; }
+  .rl-ex svg { width:124px; height:124px; display:block; }
+  .rl-ex figcaption { margin-top:4px; font-weight:700; font-size:12.5px; color:var(--edge); }
 
   .layout { display:flex; align-items:flex-start; }
 
@@ -106,6 +110,10 @@
     <p>The first and last cuts are fixed. At each cut in between you choose to keep the piece on the
        <strong>R</strong>ight or the <strong>L</strong>eft, so a string like <code>RLLR</code> names one
        configuration. For a given n there are <code>2^(n-3)</code> distinct configurations.</p>
+    <div id="rlExample" class="rl-ex"></div>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:-4px;">From the same starting point and cut
+       direction (arrow), <strong>R</strong> keeps the piece on the right, <strong>L</strong> the piece on
+       the left.</p>
 
     <h3>Configuration controls</h3>
     <ul>
@@ -130,9 +138,9 @@
     </ul>
 
     <h3>Export</h3>
-    <p>Set a <strong>filename</strong>, then <strong>Download PNG</strong> (raster, with a scale
-       multiplier for resolution) or <strong>Download SVG</strong> (vector, scales infinitely). The saved
-       image matches exactly what's shown.</p>
+    <p>Set a <strong>filename</strong>, then <strong>Download PNG</strong> (a pixel image — use the scale
+       multiplier for a higher-resolution, sharper file) or <strong>Download SVG</strong> (a vector image
+       that stays perfectly sharp at any size). The saved image matches exactly what's shown.</p>
   </div>
 </dialog>
 
@@ -610,6 +618,38 @@ const helpDlg=$('helpDialog');
 $('helpBtn').addEventListener('click', ()=>helpDlg.showModal());
 $('helpClose').addEventListener('click', ()=>helpDlg.close());
 helpDlg.addEventListener('click', e=>{ if(e.target===helpDlg) helpDlg.close(); });  // backdrop click
+
+// tiny R/L illustration: same cut, kept piece shaded on each side
+function rlMini(keepRight){
+  const cx=62, cy=62, r=50;
+  const aA=Math.PI*0.5;          // start point, bottom of circle (SVG y-down)
+  const aB=-Math.PI/6;           // cut endpoint, upper-right
+  const P=a=>[cx+r*Math.cos(a), cy+r*Math.sin(a)];
+  const A=P(aA), B=P(aB);
+  // arc bounding the kept piece: right piece = short arc A→B (through rightmost point);
+  // left piece = long arc the other way (through left/top).
+  const to = keepRight ? aB : aB+2*Math.PI;
+  const N=56, pts=[];
+  for(let k=0;k<=N;k++) pts.push(P(aA+(to-aA)*k/N));
+  const d='M'+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L')+' Z';
+  const fill = keepRight ? '#AED6F1' : '#F5CBA7';
+  // arrowhead near B along A→B
+  const dir=[B[0]-A[0],B[1]-A[1]]; const L=Math.hypot(dir[0],dir[1]); dir[0]/=L; dir[1]/=L;
+  const per=[-dir[1],dir[0]];
+  const tip=B, base=[B[0]-10*dir[0],B[1]-10*dir[1]];
+  const w1=[base[0]+4*per[0],base[1]+4*per[1]], w2=[base[0]-4*per[0],base[1]-4*per[1]];
+  return `<svg viewBox="0 0 124 124" xmlns="http://www.w3.org/2000/svg">
+    <path d="${d}" fill="${fill}" fill-opacity="0.92" stroke="none"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${EDGE}" stroke-width="1.6"/>
+    <line x1="${A[0].toFixed(1)}" y1="${A[1].toFixed(1)}" x2="${B[0].toFixed(1)}" y2="${B[1].toFixed(1)}" stroke="${EDGE}" stroke-width="2"/>
+    <polygon points="${tip[0].toFixed(1)},${tip[1].toFixed(1)} ${w1[0].toFixed(1)},${w1[1].toFixed(1)} ${w2[0].toFixed(1)},${w2[1].toFixed(1)}" fill="${EDGE}"/>
+    <circle cx="${A[0].toFixed(1)}" cy="${A[1].toFixed(1)}" r="3.2" fill="${EDGE}"/>
+    <text x="${A[0].toFixed(1)}" y="${(A[1]+13).toFixed(1)}" text-anchor="middle" font-size="9" fill="${EDGE}">start</text>
+  </svg>`;
+}
+$('rlExample').innerHTML =
+  `<figure>${rlMini(true)}<figcaption>R — keep right</figcaption></figure>` +
+  `<figure>${rlMini(false)}<figcaption>L — keep left</figcaption></figure>`;
 
 $('genBtn').addEventListener('click', generate);
 $('pngBtn').addEventListener('click', downloadPNG);
