@@ -92,6 +92,7 @@
     <div class="group">
       <h2>Display</h2>
       <label class="check"><input id="optShading" type="checkbox" checked> Shading</label>
+      <label class="check"><input id="optCuts" type="checkbox" checked> Cut lines</label>
       <label class="check"><input id="optLabels" type="checkbox" checked> Labels</label>
       <label class="check"><input id="optCircle" type="checkbox" checked> Circle outline</label>
       <div class="field" style="margin-top:12px;">
@@ -308,17 +309,22 @@ function renderCell(res, opts, ox, oy){
   let s='';
   s += `<text x="${ox+CX}" y="${oy+18}" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="13" fill="${EDGE}">${esc(res.label)}</text>`;
   if(opts.shading){
+    // Fill only — no per-section stroke. Section outer edges would otherwise trace
+    // a faint circle even with the outline off; internal separators are drawn as
+    // cut lines below, so nothing is lost.
     res.sections.forEach((pts,i)=>{
-      s += `<path d="${polyPath(pts,ox,oy)}" fill="${PALETTE[i%PALETTE.length]}" fill-opacity="0.92" stroke="${EDGE}" stroke-width="1.4"/>`;
+      s += `<path d="${polyPath(pts,ox,oy)}" fill="${PALETTE[i%PALETTE.length]}" fill-opacity="0.92" stroke="none"/>`;
     });
   }
   if(opts.circle){
     s += `<circle cx="${ox+CX}" cy="${oy+CY}" r="${RAD}" fill="none" stroke="${EDGE}" stroke-width="1.4"/>`;
   }
-  res.cuts.forEach(([p1,p2])=>{
-    const a=map(p1,ox,oy), b=map(p2,ox,oy);
-    s += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${EDGE}" stroke-width="2"/>`;
-  });
+  if(opts.cuts){
+    res.cuts.forEach(([p1,p2])=>{
+      const a=map(p1,ox,oy), b=map(p2,ox,oy);
+      s += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${EDGE}" stroke-width="2"/>`;
+    });
+  }
   if(opts.labels){
     res.sections.forEach((pts,i)=>{
       const m=map(centroid(pts),ox,oy);
@@ -350,7 +356,8 @@ let currentResults=[], currentOpts={shading:true,labels:true,circle:true};
 const CAP = 200;
 
 function readOpts(){
-  return { shading:$('optShading').checked, labels:$('optLabels').checked, circle:$('optCircle').checked };
+  return { shading:$('optShading').checked, cuts:$('optCuts').checked,
+           labels:$('optLabels').checked, circle:$('optCircle').checked };
 }
 function buildConfigList(){
   const choicesRaw = $('choicesInput').value.trim();
@@ -457,7 +464,7 @@ $('genBtn').addEventListener('click', generate);
 $('pngBtn').addEventListener('click', downloadPNG);
 $('svgBtn').addEventListener('click', downloadSVG);
 // live re-render on display toggles (cheap — reuses cached results)
-['optShading','optLabels','optCircle','cardSize'].forEach(id=>{
+['optShading','optCuts','optLabels','optCircle','cardSize'].forEach(id=>{
   $(id).addEventListener('change', ()=>{ if(currentResults.length) rerender(); });
 });
 function rerender(){
