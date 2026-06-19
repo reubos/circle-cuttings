@@ -142,7 +142,66 @@ def compare(n, choices):
     # checking cut endpoints are within the polygon set (cuts come from solver, exact)
     return js_area_err, worst, len(js_sec) == len(py_sec)
 
+# ── transcription of sectionColors() for adjacency-colouring validation ──────
+REDUCED = ['#AED6F1','#A9DFBF','#F9E79F','#F5CBA7','#D7BDE2','#FADBD8']
+def onCircle(p): return abs(math.hypot(p[0], p[1]) - 1) < 1e-6
+def _edges_of(pts):
+    m = len(pts)
+    for k in range(m):
+        yield pts[k], pts[(k+1) % m]
+def section_adjacency(sections):
+    edgeMap = {}
+    def key(a, b):
+        A = f'{a[0]:.5f},{a[1]:.5f}'; B = f'{b[0]:.5f},{b[1]:.5f}'
+        return A+'|'+B if A < B else B+'|'+A
+    for i, pts in enumerate(sections):
+        for a, b in _edges_of(pts):
+            length = math.hypot(b[0]-a[0], b[1]-a[1])
+            if onCircle(a) and onCircle(b) and length < 0.01:
+                continue
+            edgeMap.setdefault(key(a, b), []).append(i)
+    adj = [set() for _ in sections]
+    for lst in edgeMap.values():
+        for x in range(len(lst)):
+            for y in range(x+1, len(lst)):
+                adj[lst[x]].add(lst[y]); adj[lst[y]].add(lst[x])
+    return adj
+def section_colors(sections):
+    adj = section_adjacency(sections)
+    col = [-1]*len(sections)
+    for i in range(len(sections)):
+        used = {col[j] for j in adj[i] if col[j] >= 0}
+        c = 0
+        while c in used: c += 1
+        col[i] = c
+    return col, adj
+
+def check_colouring(n, choices):
+    sec, _ = runSequential(n, choices)
+    col, adj = section_colors(sec)
+    bad = sum(1 for i in range(len(sec)) for j in adj[i] if col[i] == col[j])
+    maxc = max(col) + 1 if col else 0
+    return bad, maxc
+
+print('--- adjacency colouring (no neighbour shares a colour) ---')
+worst_colors = 0
+for n, cs in [(6,'RRR'),(6,'LLL'),(9,'RRRRLR'),(16,'R'*13),(20,'LLLLRLRRRLLLRLRRL'),(43,'R'*40)]:
+    ch = [c == 'R' for c in cs]
+    bad, maxc = check_colouring(n, ch)
+    worst_colors = max(worst_colors, maxc)
+    print(f'n={n:>3} {cs[:14]:<14} colours-used={maxc}  neighbour-clashes={bad}  {"OK" if bad==0 else "CLASH"}')
+
 import random
+rng = random.Random(0)
+clash_total = 0
+for _ in range(40):
+    n = rng.choice([8,12,20,30,43])
+    ch = [rng.random() < 0.5 for _ in range(n-3)]
+    bad, maxc = check_colouring(n, ch)
+    worst_colors = max(worst_colors, maxc)
+    clash_total += bad
+print(f'40 random configs: {clash_total} neighbour-clashes; max colours ever used = {worst_colors} (palette has {len(REDUCED)})')
+
 rng = random.Random(0)
 cases = [(6,'RRR'),(6,'LLL'),(6,'RLR'),(9,'RRRRLR'),(9,'RRRLLR'),(16,'R'*13),(20,'LLLLRLRRRLLLRLRRL'),(43,'R'*40)]
 worst_all = 0.0

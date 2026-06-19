@@ -139,7 +139,48 @@
 const CIRCLE_RES = 1500;
 const PALETTE = ['#AED6F1','#A9DFBF','#F9E79F','#F5CBA7','#D7BDE2',
                  '#FADBD8','#D5F5E3','#FDEBD0','#D6EAF8','#EAECEE'];
+// Reduced high-contrast subset (the 6 saturated hues, pale near-duplicates and
+// grey dropped) used by the adjacency colouring so neighbours stay distinct.
+const REDUCED = ['#AED6F1','#A9DFBF','#F9E79F','#F5CBA7','#D7BDE2','#FADBD8'];
 const EDGE = '#2C3E50';
+
+// Greedy graph-colouring: assign each section a REDUCED colour so no two sections
+// sharing a cut edge share a colour.  Adjacency = two sections share a straight
+// (non-arc) boundary edge; arc edges connect consecutive on-circle samples.
+function onCircle(p){ return Math.abs(Math.hypot(p[0],p[1]) - 1) < 1e-6; }
+function sectionColors(sections){
+  const S = sections.length;
+  const edgeMap = new Map();
+  const key = (a,b) => {
+    const A=a[0].toFixed(5)+','+a[1].toFixed(5), B=b[0].toFixed(5)+','+b[1].toFixed(5);
+    return A<B ? A+'|'+B : B+'|'+A;
+  };
+  for(let i=0;i<S;i++){
+    const pts=sections[i], m=pts.length;
+    for(let k=0;k<m;k++){
+      const a=pts[k], b=pts[(k+1)%m];
+      const len=Math.hypot(b[0]-a[0], b[1]-a[1]);
+      const isArc = onCircle(a) && onCircle(b) && len < 0.01;   // consecutive arc samples
+      if(isArc) continue;                                       // cut edge → defines adjacency
+      const kk=key(a,b);
+      if(!edgeMap.has(kk)) edgeMap.set(kk, []);
+      edgeMap.get(kk).push(i);
+    }
+  }
+  const adj = Array.from({length:S}, () => new Set());
+  for(const list of edgeMap.values())
+    for(let x=0;x<list.length;x++) for(let y=x+1;y<list.length;y++){
+      adj[list[x]].add(list[y]); adj[list[y]].add(list[x]);
+    }
+  const col = new Array(S).fill(-1);
+  for(let i=0;i<S;i++){
+    const used=new Set();
+    adj[i].forEach(j=>{ if(col[j]>=0) used.add(col[j]); });
+    let c=0; while(used.has(c)) c++;
+    col[i]=c;
+  }
+  return col.map(c => REDUCED[c % REDUCED.length]);
+}
 
 const sub = (a,b) => [a[0]-b[0], a[1]-b[1]];
 const cross = (a,b) => a[0]*b[1] - a[1]*b[0];
@@ -311,9 +352,11 @@ function renderCell(res, opts, ox, oy){
   if(opts.shading){
     // Fill only — no per-section stroke. Section outer edges would otherwise trace
     // a faint circle even with the outline off; internal separators are drawn as
-    // cut lines below, so nothing is lost.
+    // cut lines below, so nothing is lost.  Colours come from adjacency colouring
+    // so touching sections always differ.
+    const cols = sectionColors(res.sections);
     res.sections.forEach((pts,i)=>{
-      s += `<path d="${polyPath(pts,ox,oy)}" fill="${PALETTE[i%PALETTE.length]}" fill-opacity="0.92" stroke="none"/>`;
+      s += `<path d="${polyPath(pts,ox,oy)}" fill="${cols[i]}" fill-opacity="0.92" stroke="none"/>`;
     });
   }
   if(opts.circle){
@@ -403,6 +446,7 @@ function generate(){
     $('warn').classList.remove('show'); return;
   }
   document.documentElement.style.setProperty('--cardmin', (parseInt($('cardSize').value,10)||230)+'px');
+  const t0=performance.now();
   const frag=document.createDocumentFragment();
   for(const cfg of list){
     let res;
@@ -415,8 +459,9 @@ function generate(){
     frag.appendChild(card);
   }
   grid.appendChild(frag);
+  const ms=Math.round(performance.now()-t0);
   $('resTitle').innerHTML='<strong>'+title+'</strong>';
-  $('resCount').textContent = currentResults.length+' configuration'+(currentResults.length===1?'':'s');
+  $('resCount').textContent = currentResults.length+' configuration'+(currentResults.length===1?'':'s')+' · '+ms+' ms';
   const w=$('warn');
   if(warn){ w.textContent=warn; w.classList.add('show'); } else w.classList.remove('show');
 }
