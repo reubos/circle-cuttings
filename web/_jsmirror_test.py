@@ -145,26 +145,32 @@ def compare(n, choices):
 # ── transcription of sectionColors() for adjacency-colouring validation ──────
 REDUCED = ['#AED6F1','#A9DFBF','#F9E79F','#F5CBA7','#D7BDE2','#FADBD8']
 def onCircle(p): return abs(math.hypot(p[0], p[1]) - 1) < 1e-6
-def _edges_of(pts):
-    m = len(pts)
+def cutEdges(pts):
+    m = len(pts); out = []
     for k in range(m):
-        yield pts[k], pts[(k+1) % m]
+        a = pts[k]; b = pts[(k+1) % m]
+        if onCircle(a) and onCircle(b) and math.hypot(b[0]-a[0], b[1]-a[1]) < 0.01:
+            continue
+        out.append((a, b))
+    return out
+def _cross(u, v): return u[0]*v[1] - u[1]*v[0]
+def segAdjacent(e1, e2):
+    (a1, a2), (b1, b2) = e1, e2
+    d = (a2[0]-a1[0], a2[1]-a1[1]); dd = d[0]*d[0] + d[1]*d[1]
+    if dd < 1e-18: return False
+    L = math.sqrt(dd)
+    for b in (b1, b2):
+        if abs(_cross(d, (b[0]-a1[0], b[1]-a1[1]))) / L > 1e-7: return False
+    t = lambda p: ((p[0]-a1[0])*d[0] + (p[1]-a1[1])*d[1]) / dd
+    tb = sorted([t(b1), t(b2)]); lo = max(0.0, tb[0]); hi = min(1.0, tb[1])
+    return (hi - lo) * L > 1e-6
 def section_adjacency(sections):
-    edgeMap = {}
-    def key(a, b):
-        A = f'{a[0]:.5f},{a[1]:.5f}'; B = f'{b[0]:.5f},{b[1]:.5f}'
-        return A+'|'+B if A < B else B+'|'+A
-    for i, pts in enumerate(sections):
-        for a, b in _edges_of(pts):
-            length = math.hypot(b[0]-a[0], b[1]-a[1])
-            if onCircle(a) and onCircle(b) and length < 0.01:
-                continue
-            edgeMap.setdefault(key(a, b), []).append(i)
+    edges = [cutEdges(p) for p in sections]
     adj = [set() for _ in sections]
-    for lst in edgeMap.values():
-        for x in range(len(lst)):
-            for y in range(x+1, len(lst)):
-                adj[lst[x]].add(lst[y]); adj[lst[y]].add(lst[x])
+    for i in range(len(sections)):
+        for j in range(i+1, len(sections)):
+            if any(segAdjacent(e1, e2) for e1 in edges[i] for e2 in edges[j]):
+                adj[i].add(j); adj[j].add(i)
     return adj
 def section_colors(sections):
     adj = section_adjacency(sections)
@@ -176,10 +182,22 @@ def section_colors(sections):
         col[i] = c
     return col, adj
 
+def _true_adj(sec):
+    """Ground-truth adjacency via Shapely shared-boundary length (not the JS method)."""
+    from shapely.geometry import Polygon
+    polys = [Polygon(s) for s in sec]
+    adj = [set() for _ in sec]
+    for i in range(len(polys)):
+        for j in range(i+1, len(polys)):
+            if polys[i].intersection(polys[j]).length > 1e-7:
+                adj[i].add(j); adj[j].add(i)
+    return adj
+
 def check_colouring(n, choices):
     sec, _ = runSequential(n, choices)
-    col, adj = section_colors(sec)
-    bad = sum(1 for i in range(len(sec)) for j in adj[i] if col[i] == col[j])
+    col, _ = section_colors(sec)
+    true_adj = _true_adj(sec)                       # validate colours against TRUTH
+    bad = sum(1 for i in range(len(sec)) for j in true_adj[i] if j > i and col[i] == col[j])
     maxc = max(col) + 1 if col else 0
     return bad, maxc
 

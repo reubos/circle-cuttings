@@ -144,34 +144,44 @@ const PALETTE = ['#AED6F1','#A9DFBF','#F9E79F','#F5CBA7','#D7BDE2',
 const REDUCED = ['#AED6F1','#A9DFBF','#F9E79F','#F5CBA7','#D7BDE2','#FADBD8'];
 const EDGE = '#2C3E50';
 
-// Greedy graph-colouring: assign each section a REDUCED colour so no two sections
-// sharing a cut edge share a colour.  Adjacency = two sections share a straight
-// (non-arc) boundary edge; arc edges connect consecutive on-circle samples.
+// Greedy graph-colouring: assign each section a REDUCED colour so no two adjacent
+// sections share a colour.  Two sections are adjacent if they share a straight
+// (non-arc) boundary segment of positive length.  Because of T-junctions (one
+// section's vertex sitting mid-edge of another), shared edges often DON'T share
+// endpoints — so adjacency is detected by collinear + overlapping cut edges, not
+// exact edge matching.
 function onCircle(p){ return Math.abs(Math.hypot(p[0],p[1]) - 1) < 1e-6; }
+function cutEdges(pts){                       // boundary segments that aren't arc samples
+  const m=pts.length, out=[];
+  for(let k=0;k<m;k++){
+    const a=pts[k], b=pts[(k+1)%m];
+    if(onCircle(a) && onCircle(b) && Math.hypot(b[0]-a[0],b[1]-a[1]) < 0.01) continue;
+    out.push([a,b]);
+  }
+  return out;
+}
+function segAdjacent(e1,e2){                   // collinear and overlapping by >0 length?
+  const a1=e1[0],a2=e1[1],b1=e2[0],b2=e2[1];
+  const d=[a2[0]-a1[0], a2[1]-a1[1]], dd=d[0]*d[0]+d[1]*d[1];
+  if(dd<1e-18) return false;
+  const L=Math.sqrt(dd);
+  for(const b of [b1,b2]){
+    if(Math.abs(cross(d,[b[0]-a1[0],b[1]-a1[1]]))/L > 1e-7) return false;  // off the line
+  }
+  const t = p => ((p[0]-a1[0])*d[0]+(p[1]-a1[1])*d[1])/dd;
+  let tb=[t(b1),t(b2)]; if(tb[0]>tb[1]) tb=[tb[1],tb[0]];
+  const lo=Math.max(0,tb[0]), hi=Math.min(1,tb[1]);
+  return (hi-lo)*L > 1e-6;
+}
 function sectionColors(sections){
   const S = sections.length;
-  const edgeMap = new Map();
-  const key = (a,b) => {
-    const A=a[0].toFixed(5)+','+a[1].toFixed(5), B=b[0].toFixed(5)+','+b[1].toFixed(5);
-    return A<B ? A+'|'+B : B+'|'+A;
-  };
-  for(let i=0;i<S;i++){
-    const pts=sections[i], m=pts.length;
-    for(let k=0;k<m;k++){
-      const a=pts[k], b=pts[(k+1)%m];
-      const len=Math.hypot(b[0]-a[0], b[1]-a[1]);
-      const isArc = onCircle(a) && onCircle(b) && len < 0.01;   // consecutive arc samples
-      if(isArc) continue;                                       // cut edge → defines adjacency
-      const kk=key(a,b);
-      if(!edgeMap.has(kk)) edgeMap.set(kk, []);
-      edgeMap.get(kk).push(i);
-    }
-  }
+  const edges = sections.map(cutEdges);
   const adj = Array.from({length:S}, () => new Set());
-  for(const list of edgeMap.values())
-    for(let x=0;x<list.length;x++) for(let y=x+1;y<list.length;y++){
-      adj[list[x]].add(list[y]); adj[list[y]].add(list[x]);
-    }
+  for(let i=0;i<S;i++) for(let j=i+1;j<S;j++){
+    let found=false;
+    for(const e1 of edges[i]){ for(const e2 of edges[j]){ if(segAdjacent(e1,e2)){found=true;break;} } if(found) break; }
+    if(found){ adj[i].add(j); adj[j].add(i); }
+  }
   const col = new Array(S).fill(-1);
   for(let i=0;i<S;i++){
     const used=new Set();
