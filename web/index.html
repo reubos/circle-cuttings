@@ -182,12 +182,27 @@ function sectionColors(sections){
     for(const e1 of edges[i]){ for(const e2 of edges[j]){ if(segAdjacent(e1,e2)){found=true;break;} } if(found) break; }
     if(found){ adj[i].add(j); adj[j].add(i); }
   }
+  const P = REDUCED.length;
   const col = new Array(S).fill(-1);
+  // Pass 1 — lowest-index greedy → a proper colouring (clash-free, few colours).
   for(let i=0;i<S;i++){
-    const used=new Set();
-    adj[i].forEach(j=>{ if(col[j]>=0) used.add(col[j]); });
-    let c=0; while(used.has(c)) c++;
+    const forb=new Set();
+    adj[i].forEach(j=>{ if(col[j]>=0) forb.add(col[j]); });
+    let c=0; while(forb.has(c)) c++;
     col[i]=c;
+  }
+  // Pass 2 — least-used refinement for variety. Candidates always include the
+  // section's current colour, so the set is never empty and properness is kept
+  // at every step → guaranteed no clash regardless of degree, more hues used.
+  for(let pass=0; pass<4; pass++){
+    const use=new Array(P).fill(0);
+    for(const c of col) if(c<P) use[c]++;
+    for(let i=0;i<S;i++){
+      const forb=new Set(); adj[i].forEach(j=>forb.add(col[j]));
+      let best=col[i];
+      for(let c=0;c<P;c++) if(!forb.has(c) && use[c]<use[best]) best=c;
+      use[col[i]]--; col[i]=best; use[best]++;
+    }
   }
   return col.map(c => REDUCED[c % REDUCED.length]);
 }

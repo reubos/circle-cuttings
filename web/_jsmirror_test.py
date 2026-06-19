@@ -172,14 +172,26 @@ def section_adjacency(sections):
             if any(segAdjacent(e1, e2) for e1 in edges[i] for e2 in edges[j]):
                 adj[i].add(j); adj[j].add(i)
     return adj
+REDUCED = ['#AED6F1','#A9DFBF','#F9E79F','#F5CBA7','#D7BDE2','#FADBD8']
 def section_colors(sections):
     adj = section_adjacency(sections)
-    col = [-1]*len(sections)
-    for i in range(len(sections)):
-        used = {col[j] for j in adj[i] if col[j] >= 0}
+    S = len(sections); P = len(REDUCED)
+    col = [-1]*S
+    for i in range(S):                              # pass 1: lowest-index
+        forb = {col[j] for j in adj[i] if col[j] >= 0}
         c = 0
-        while c in used: c += 1
+        while c in forb: c += 1
         col[i] = c
+    for _ in range(4):                              # pass 2: least-used refinement
+        use = [0]*P
+        for c in col:
+            if c < P: use[c] += 1
+        for i in range(S):
+            forb = {col[j] for j in adj[i]}
+            best = col[i]
+            for c in range(P):
+                if c not in forb and use[c] < use[best]: best = c
+            use[col[i]] -= 1; col[i] = best; use[best] += 1
     return col, adj
 
 def _true_adj(sec):
