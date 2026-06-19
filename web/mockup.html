@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Circle Cuttings — layout mockup</title>
+<style>
+  :root {
+    --edge: #2C3E50;
+    --bg: #F0F0F0;
+    --panel: #FFFFFF;
+    --card-bg: #FAFAFA;
+    --line: #d9dde2;
+    --accent: #2C3E50;
+    --muted: #6b7785;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    color: var(--edge);
+    background: var(--bg);
+  }
+  header.top {
+    padding: 18px 24px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  header.top h1 { margin: 0; font-size: 20px; font-weight: 700; }
+  header.top p  { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+
+  .layout { display: flex; align-items: flex-start; gap: 0; }
+
+  /* ── control panel ─────────────────────────────────────────── */
+  aside.controls {
+    width: 290px;
+    flex: 0 0 290px;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    padding: 20px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  .group { margin-bottom: 26px; }
+  .group h2 {
+    margin: 0 0 12px;
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 6px;
+  }
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+  .field .hint { font-weight: 400; color: var(--muted); font-size: 11.5px; }
+  .field input[type=text],
+  .field input[type=number] {
+    width: 100%;
+    padding: 7px 9px;
+    font-size: 13px;
+    border: 1px solid #c7ccd3;
+    border-radius: 6px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    background: #fff;
+  }
+  .row2 { display: flex; gap: 10px; }
+  .row2 .field { flex: 1; }
+
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 9px;
+    cursor: pointer;
+  }
+  .check input { width: 15px; height: 15px; accent-color: var(--accent); }
+
+  button.primary {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--accent);
+    border: 0;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  button.ghost {
+    width: 100%;
+    padding: 9px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    background: #fff;
+    border: 1px solid var(--accent);
+    border-radius: 7px;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  .export-scale { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .export-scale label { font-size: 12.5px; font-weight: 600; }
+  .export-scale input { width: 64px; }
+
+  /* ── results grid ──────────────────────────────────────────── */
+  main.results { flex: 1; padding: 24px; min-width: 0; }
+  .results-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .results-head .count { font-size: 13px; color: var(--muted); }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 18px;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+  }
+  .card .title {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    color: var(--edge);
+    margin-bottom: 8px;
+  }
+  .card svg { width: 100%; height: auto; display: block; }
+
+  .note {
+    margin: 0 24px 20px;
+    padding: 10px 14px;
+    background: #FCF3CF;
+    border: 1px solid #F7DC6F;
+    border-radius: 8px;
+    font-size: 12.5px;
+    color: #7d6608;
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Equal-Area Circle Cutting</h1>
+  <p>Sequential configurations &mdash; interactive viewer &nbsp;·&nbsp; <strong>layout mockup (controls not yet wired)</strong></p>
+</header>
+
+<div class="note">
+  This is a static mockup to review layout &amp; styling only. Nothing is interactive yet —
+  the diagrams below are placeholders. Once approved, the analytic solver gets ported to
+  JavaScript and wired to these controls.
+</div>
+
+<div class="layout">
+
+  <!-- ─────────────── CONTROLS ─────────────── -->
+  <aside class="controls">
+
+    <div class="group">
+      <h2>Configuration</h2>
+
+      <div class="field">
+        <label>n values <span class="hint">(space-separated)</span></label>
+        <input type="text" value="6" placeholder="e.g. 6 7 8">
+      </div>
+
+      <div class="field">
+        <label>Choices <span class="hint">(optional, overrides n)</span></label>
+        <input type="text" value="" placeholder="e.g. RLRL, L3R2, (LR)3">
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Sample</label>
+          <input type="number" value="" placeholder="all" min="1">
+        </div>
+        <div class="field">
+          <label>Seed</label>
+          <input type="number" value="" placeholder="random">
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Display</h2>
+      <label class="check"><input type="checkbox" checked> Shading</label>
+      <label class="check"><input type="checkbox" checked> Labels</label>
+      <label class="check"><input type="checkbox" checked> Circle outline</label>
+    </div>
+
+    <div class="group">
+      <h2>Generate</h2>
+      <button class="primary">Generate diagrams</button>
+    </div>
+
+    <div class="group">
+      <h2>Export</h2>
+      <div class="field">
+        <label>Filename</label>
+        <input type="text" value="circle_cuttings" placeholder="filename (no extension)">
+      </div>
+      <div class="export-scale">
+        <label>PNG scale</label>
+        <input type="number" value="2" min="1" max="6" step="1">&times;
+      </div>
+      <button class="ghost">⬇ Download PNG</button>
+      <button class="ghost">⬇ Download SVG</button>
+    </div>
+
+  </aside>
+
+  <!-- ─────────────── RESULTS ─────────────── -->
+  <main class="results">
+    <div class="results-head">
+      <div><strong>n = 6</strong> &mdash; all configurations</div>
+      <div class="count">8 configurations</div>
+    </div>
+
+    <div class="grid" id="grid"><!-- placeholder cards injected below --></div>
+  </main>
+
+</div>
+
+<script>
+// ── Static placeholder diagrams (NOT the real solver) ───────────────────────
+// Just enough to convey the card look: a circle sliced into pastel wedges
+// with numbered labels. Geometry is decorative only.
+const PALETTE = ['#AED6F1','#A9DFBF','#F9E79F','#F5CBA7','#D7BDE2',
+                 '#FADBD8','#D5F5E3','#FDEBD0','#D6EAF8','#EAECEE'];
+const EDGE = '#2C3E50';
+
+function placeholderSVG(seedAngles) {
+  const R = 90, cx = 100, cy = 100;
+  const pts = seedAngles.map(a => [cx + R*Math.cos(a), cy - R*Math.sin(a)]);
+  let svg = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">`;
+  // wedges
+  for (let i = 0; i < pts.length; i++) {
+    const p1 = pts[i], p2 = pts[(i+1) % pts.length];
+    const a1 = seedAngles[i], a2 = seedAngles[(i+1) % seedAngles.length];
+    const large = ((a2 - a1 + 2*Math.PI) % (2*Math.PI)) > Math.PI ? 1 : 0;
+    svg += `<path d="M${cx},${cy} L${p1[0].toFixed(1)},${p1[1].toFixed(1)} `
+         + `A${R},${R} 0 ${large} 0 ${p2[0].toFixed(1)},${p2[1].toFixed(1)} Z" `
+         + `fill="${PALETTE[i % PALETTE.length]}" stroke="${EDGE}" stroke-width="1.4"/>`;
+    // label at wedge mid
+    const mid = (a1 + a2)/2;
+    const lx = cx + 0.6*R*Math.cos(mid), ly = cy - 0.6*R*Math.sin(mid);
+    svg += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" `
+         + `dominant-baseline="central" font-size="12" font-weight="700" fill="${EDGE}">${i+1}</text>`;
+  }
+  svg += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${EDGE}" stroke-width="1.4"/></svg>`;
+  return svg;
+}
+
+const labels = ['RRR','RRL','RLR','RLL','LRR','LRL','LLR','LLL'];
+const grid = document.getElementById('grid');
+labels.forEach((lab, k) => {
+  // vary the slice angles a little per card for visual variety
+  const base = [0, 0.9, 1.7, 2.6, 3.6, 4.7];
+  const angles = base.map((a, i) => a + 0.12*Math.sin(k + i));
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `<div class="title">n=6&nbsp;&nbsp;[${lab}]</div>` + placeholderSVG(angles);
+  grid.appendChild(card);
+});
+</script>
+
+</body>
+</html>

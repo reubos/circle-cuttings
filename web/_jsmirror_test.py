@@ -1,0 +1,163 @@
+"""
+Mechanical transcription of the JavaScript solver in web/index.html into plain
+Python (no numpy/shapely), used ONLY to validate the JS port against the trusted
+analytic solver in generate_diagrams.run_sequential.  Not shipped.
+"""
+import math, sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import generate_diagrams as gd
+
+CIRCLE_RES = 1500
+
+def sub(a, b): return [a[0]-b[0], a[1]-b[1]]
+def cross(a, b): return a[0]*b[1] - a[1]*b[0]
+
+def makeCircle(r=1.0):
+    pts = []
+    for i in range(CIRCLE_RES):
+        t = 2*math.pi*i/CIRCLE_RES
+        pts.append([r*math.cos(t), r*math.sin(t)])
+    return pts
+
+def polyArea(pts):
+    a = 0.0
+    n = len(pts)
+    for i in range(n):
+        q = pts[(i+1) % n]
+        a += pts[i][0]*q[1] - q[0]*pts[i][1]
+    return abs(a)/2
+
+def centroid(pts):
+    a = cx = cy = 0.0
+    n = len(pts)
+    for i in range(n):
+        p = pts[i]; q = pts[(i+1) % n]
+        f = p[0]*q[1] - q[0]*p[1]
+        a += f; cx += (p[0]+q[0])*f; cy += (p[1]+q[1])*f
+    if abs(a) < 1e-15:
+        mx = sum(p[0] for p in pts)/n; my = sum(p[1] for p in pts)/n
+        return [mx, my]
+    a *= 0.5
+    return [cx/(6*a), cy/(6*a)]
+
+def ccwOpen(pts):
+    p = pts[:]
+    if len(p) > 1 and p[-1][0] == p[0][0] and p[-1][1] == p[0][1]:
+        p = p[:-1]
+    a = 0.0
+    n = len(p)
+    for i in range(n):
+        q = p[(i+1) % n]
+        a += p[i][0]*q[1] - q[0]*p[i][1]
+    if a < 0:
+        p = p[::-1]
+    return p
+
+def startIndex(V, cp):
+    k = 0; best = float('inf')
+    for i in range(len(V)):
+        d = math.hypot(V[i][0]-cp[0], V[i][1]-cp[1])
+        if d < best: best = d; k = i
+    if best < 1e-7:
+        return V, k
+    m = len(V); bd = float('inf'); bi = 0
+    for i in range(m):
+        a = V[i]; b = V[(i+1) % m]; ab = sub(b, a)
+        L2 = ab[0]*ab[0] + ab[1]*ab[1]
+        t = 0.0 if L2 == 0 else ((cp[0]-a[0])*ab[0] + (cp[1]-a[1])*ab[1])/L2
+        t = max(0.0, min(1.0, t))
+        proj = [a[0]+t*ab[0], a[1]+t*ab[1]]
+        dist = math.hypot(proj[0]-cp[0], proj[1]-cp[1])
+        if dist < bd: bd = dist; bi = i
+    NV = V[:bi+1] + [cp] + V[bi+1:]
+    return NV, bi+1
+
+def solveCut(remaining, curPt, targetRight):
+    V = ccwOpen(remaining)
+    V, s = startIndex(V, curPt)
+    m = len(V)
+    V = V[s:] + V[:s]
+    V0 = V[0]
+    A = [0.0, 0.0]
+    for i in range(1, m-1):
+        d1 = sub(V[i], V0); d2 = sub(V[i+1], V0)
+        A.append(A[-1] + 0.5*cross(d1, d2))
+    total = A[m-1]
+    tr = targetRight
+    if not (0 < tr < total):
+        tr = min(max(tr, total*1e-12), total*(1-1e-12))
+    lo, hi = 1, m-1
+    while hi - lo > 1:
+        mid = (lo+hi) >> 1
+        if A[mid] <= tr: lo = mid
+        else: hi = mid
+    j = lo
+    Vj = V[j]; Vj1 = V[j+1]; edge = sub(Vj1, Vj); d = sub(Vj, V0)
+    twice = cross(d, edge)
+    t = 0.0 if abs(twice) < 1e-15 else (tr - A[j])/(0.5*twice)
+    t = max(0.0, min(1.0, t))
+    ep = [Vj[0]+t*edge[0], Vj[1]+t*edge[1]]
+    right = [V0] + V[1:j+1] + [ep]
+    left = [V0, ep] + V[j+1:]
+    return ep, right, left
+
+def runSequential(n, choices):
+    C = makeCircle()
+    T = polyArea(C)/n
+    sections = []; cuts = []
+    remaining = C; curPt = [1, 0]
+    def apply(target, takeRight):
+        nonlocal remaining, curPt
+        ep, right, left = solveCut(remaining, curPt, target)
+        sections.append(right if takeRight else left)
+        cuts.append([curPt, ep])
+        remaining = left if takeRight else right
+        curPt = ep
+    if n < 2:
+        sections.append(remaining)
+        return sections, cuts
+    apply(T, True)
+    for r in choices:
+        apply(T if r else (polyArea(remaining)-T), r)
+    if n >= 3:
+        ep, right, left = solveCut(remaining, curPt, T)
+        cuts.append([curPt, ep]); sections.append(right); sections.append(left)
+    else:
+        sections.append(remaining)
+    return sections, cuts
+
+# ── compare JS-mirror vs trusted Python analytic solver ──────────────────────
+def compare(n, choices):
+    js_sec, js_cuts = runSequential(n, choices)
+    py = gd.run_sequential(n, list(choices))
+    py_sec = py[0]
+    T = polyArea(makeCircle()) / n  # match solver's polygon-based T (1500-gon, not π)
+    # area exactness (JS)
+    js_area_err = max(abs(polyArea(s) - T) for s in js_sec)
+    # match sections by sorted centroid
+    jc = sorted((round(centroid(s)[0], 6), round(centroid(s)[1], 6)) for s in js_sec)
+    pc = sorted((round(s.centroid.x, 6), round(s.centroid.y, 6)) for s in py_sec)
+    worst = max(max(abs(a[0]-b[0]), abs(a[1]-b[1])) for a, b in zip(jc, pc)) if len(jc) == len(pc) else 9.99
+    # overshoot: every cut endpoint lies on some section boundary? approximate by
+    # checking cut endpoints are within the polygon set (cuts come from solver, exact)
+    return js_area_err, worst, len(js_sec) == len(py_sec)
+
+import random
+rng = random.Random(0)
+cases = [(6,'RRR'),(6,'LLL'),(6,'RLR'),(9,'RRRRLR'),(9,'RRRLLR'),(16,'R'*13),(20,'LLLLRLRRRLLLRLRRL'),(43,'R'*40)]
+worst_all = 0.0
+for n, cs in cases:
+    ch = [c == 'R' for c in cs]
+    ae, w, samelen = compare(n, ch)
+    worst_all = max(worst_all, w)
+    flag = 'OK' if (ae < 1e-9 and w < 1e-4 and samelen) else 'DIFF'
+    print(f'n={n:>3} {cs[:14]:<14} JS area-err={ae:.1e}  vs-Py centroid={w:.1e}  {flag}')
+# random sample
+bad = 0
+for _ in range(20):
+    n = rng.choice([8,12,20,30])
+    ch = [rng.random() < 0.5 for _ in range(n-3)]
+    ae, w, samelen = compare(n, ch)
+    if not (ae < 1e-9 and w < 1e-3 and samelen):
+        print(f'  SAMPLE DIFF n={n}: area-err={ae:.1e} centroid={w:.1e}'); bad += 1
+print(f'random sample: {20-bad}/20 consistent;  worst fixed-case centroid diff = {worst_all:.1e}')

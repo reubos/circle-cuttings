@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Equal-Area Circle Cutting</title>
+<style>
+  :root {
+    --edge:#2C3E50; --bg:#F0F0F0; --panel:#FFFFFF; --card-bg:#FAFAFA;
+    --line:#d9dde2; --accent:#2C3E50; --muted:#6b7785;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+         color:var(--edge); background:var(--bg); }
+  header.top { padding:18px 24px; background:var(--panel); border-bottom:1px solid var(--line); }
+  header.top h1 { margin:0; font-size:20px; font-weight:700; }
+  header.top p  { margin:4px 0 0; font-size:13px; color:var(--muted); }
+
+  .layout { display:flex; align-items:flex-start; }
+
+  aside.controls {
+    width:290px; flex:0 0 290px; background:var(--panel); border-right:1px solid var(--line);
+    padding:20px; position:sticky; top:0; height:100vh; overflow-y:auto;
+  }
+  .group { margin-bottom:24px; }
+  .group h2 { margin:0 0 12px; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+              color:var(--muted); border-bottom:1px solid var(--line); padding-bottom:6px; }
+  .field { margin-bottom:13px; }
+  .field label { display:block; font-size:12.5px; font-weight:600; margin-bottom:5px; }
+  .field .hint { font-weight:400; color:var(--muted); font-size:11.5px; }
+  .field input[type=text], .field input[type=number] {
+    width:100%; padding:7px 9px; font-size:13px; border:1px solid #c7ccd3; border-radius:6px;
+    font-family:ui-monospace,Menlo,Consolas,monospace; background:#fff;
+  }
+  .row2 { display:flex; gap:10px; } .row2 .field { flex:1; }
+  .check { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600;
+           margin-bottom:9px; cursor:pointer; }
+  .check input { width:15px; height:15px; accent-color:var(--accent); }
+  button.primary { width:100%; padding:10px; font-size:14px; font-weight:700; color:#fff;
+                   background:var(--accent); border:0; border-radius:7px; cursor:pointer; }
+  button.primary:active { transform:translateY(1px); }
+  button.ghost { width:100%; padding:9px; font-size:13px; font-weight:600; color:var(--accent);
+                 background:#fff; border:1px solid var(--accent); border-radius:7px;
+                 cursor:pointer; margin-bottom:8px; }
+  .export-scale { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  .export-scale label { font-size:12.5px; font-weight:600; }
+  .export-scale input { width:64px; }
+
+  main.results { flex:1; padding:24px; min-width:0; }
+  .results-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px; }
+  .results-head .count { font-size:13px; color:var(--muted); }
+  .warn { margin:0 0 16px; padding:10px 14px; background:#FCF3CF; border:1px solid #F7DC6F;
+          border-radius:8px; font-size:12.5px; color:#7d6608; display:none; }
+  .warn.show { display:block; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(var(--cardmin,230px), 1fr)); gap:18px; }
+  .card { background:var(--card-bg); border:1px solid var(--line); border-radius:10px; padding:6px; }
+  .card svg { width:100%; height:auto; display:block; }
+  .empty { color:var(--muted); font-size:14px; padding:40px 0; text-align:center; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Equal-Area Circle Cutting</h1>
+  <p>Sequential configurations &mdash; each cut starts where the previous ended, every section has equal area.</p>
+</header>
+
+<div class="layout">
+  <aside class="controls">
+    <div class="group">
+      <h2>Configuration</h2>
+      <div class="field">
+        <label>n values <span class="hint">(space-separated)</span></label>
+        <input id="nInput" type="text" value="6" placeholder="e.g. 6 7 8">
+      </div>
+      <div class="field">
+        <label>Choices <span class="hint">(optional, overrides n)</span></label>
+        <input id="choicesInput" type="text" value="" placeholder="e.g. RLRL, L3R2, (LR)3">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Sample</label>
+          <input id="sampleInput" type="number" value="" placeholder="all" min="1">
+        </div>
+        <div class="field">
+          <label>Seed</label>
+          <input id="seedInput" type="number" value="" placeholder="random">
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Display</h2>
+      <label class="check"><input id="optShading" type="checkbox" checked> Shading</label>
+      <label class="check"><input id="optLabels" type="checkbox" checked> Labels</label>
+      <label class="check"><input id="optCircle" type="checkbox" checked> Circle outline</label>
+      <div class="field" style="margin-top:12px;">
+        <label>Card size <span class="hint">px min width</span></label>
+        <input id="cardSize" type="number" value="230" min="120" max="600" step="10">
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Generate</h2>
+      <button id="genBtn" class="primary">Generate diagrams</button>
+    </div>
+
+    <div class="group">
+      <h2>Export</h2>
+      <div class="field">
+        <label>Filename</label>
+        <input id="fnameInput" type="text" value="circle_cuttings" placeholder="filename (no extension)">
+      </div>
+      <div class="export-scale">
+        <label>PNG scale</label>
+        <input id="scaleInput" type="number" value="2" min="1" max="6" step="1">&times;
+      </div>
+      <button id="pngBtn" class="ghost">⬇ Download PNG</button>
+      <button id="svgBtn" class="ghost">⬇ Download SVG</button>
+    </div>
+  </aside>
+
+  <main class="results">
+    <div class="results-head">
+      <div id="resTitle"><strong>—</strong></div>
+      <div class="count" id="resCount"></div>
+    </div>
+    <div class="warn" id="warn"></div>
+    <div class="grid" id="grid"><div class="empty">Click “Generate diagrams” to begin.</div></div>
+  </main>
+</div>
+
+<script>
+"use strict";
+// ════════════════════════════════════════════════════════════════════════════
+//  GEOMETRY — analytic solver ported 1:1 from generate_diagrams.py
+// ════════════════════════════════════════════════════════════════════════════
+const CIRCLE_RES = 1500;
+const PALETTE = ['#AED6F1','#A9DFBF','#F9E79F','#F5CBA7','#D7BDE2',
+                 '#FADBD8','#D5F5E3','#FDEBD0','#D6EAF8','#EAECEE'];
+const EDGE = '#2C3E50';
+
+const sub = (a,b) => [a[0]-b[0], a[1]-b[1]];
+const cross = (a,b) => a[0]*b[1] - a[1]*b[0];
+
+function makeCircle(r=1.0){
+  const pts = [];
+  for (let i=0;i<CIRCLE_RES;i++){
+    const t = 2*Math.PI*i/CIRCLE_RES;
+    pts.push([r*Math.cos(t), r*Math.sin(t)]);
+  }
+  return pts;
+}
+function polyArea(pts){                       // unsigned area (shoelace)
+  let a=0; for(let i=0;i<pts.length;i++){ const q=pts[(i+1)%pts.length]; a += pts[i][0]*q[1]-q[0]*pts[i][1]; }
+  return Math.abs(a)/2;
+}
+function centroid(pts){
+  let a=0, cx=0, cy=0;
+  for(let i=0;i<pts.length;i++){
+    const p=pts[i], q=pts[(i+1)%pts.length];
+    const f = p[0]*q[1]-q[0]*p[1];
+    a+=f; cx+=(p[0]+q[0])*f; cy+=(p[1]+q[1])*f;
+  }
+  if (Math.abs(a)<1e-15){ // degenerate fallback: vertex mean
+    let mx=0,my=0; pts.forEach(p=>{mx+=p[0];my+=p[1];}); return [mx/pts.length,my/pts.length];
+  }
+  a*=0.5; return [cx/(6*a), cy/(6*a)];
+}
+function ccwOpen(pts){
+  let p = pts.slice();
+  const last=p[p.length-1], first=p[0];
+  if (p.length>1 && last[0]===first[0] && last[1]===first[1]) p=p.slice(0,-1);
+  let a=0; for(let i=0;i<p.length;i++){ const q=p[(i+1)%p.length]; a+=p[i][0]*q[1]-q[0]*p[i][1]; }
+  if (a<0) p=p.slice().reverse();
+  return p;
+}
+function startIndex(V, cp){
+  let k=0, best=Infinity;
+  for(let i=0;i<V.length;i++){ const d=Math.hypot(V[i][0]-cp[0], V[i][1]-cp[1]); if(d<best){best=d;k=i;} }
+  if (best<1e-7) return [V,k];
+  const m=V.length; let bd=Infinity, bi=0;
+  for(let i=0;i<m;i++){
+    const a=V[i], b=V[(i+1)%m], ab=sub(b,a);
+    const L2=ab[0]*ab[0]+ab[1]*ab[1];
+    let t = L2===0?0:((cp[0]-a[0])*ab[0]+(cp[1]-a[1])*ab[1])/L2; t=Math.max(0,Math.min(1,t));
+    const proj=[a[0]+t*ab[0], a[1]+t*ab[1]];
+    const dist=Math.hypot(proj[0]-cp[0], proj[1]-cp[1]);
+    if(dist<bd){bd=dist; bi=i;}
+  }
+  const NV = V.slice(0,bi+1).concat([cp]).concat(V.slice(bi+1));
+  return [NV, bi+1];
+}
+// Find ep so the CCW-swept piece from cur_pt has area == targetRight.  Convex ⇒
+// monotonic ⇒ exact single crossing: fan prefix areas, bracket, solve the edge.
+function solveCut(remaining, curPt, targetRight){
+  let V = ccwOpen(remaining), s;
+  [V, s] = startIndex(V, curPt);
+  const m = V.length;
+  V = V.slice(s).concat(V.slice(0,s));
+  const V0 = V[0];
+  const A = [0,0];
+  for(let i=1;i<m-1;i++){
+    const d1=sub(V[i],V0), d2=sub(V[i+1],V0);
+    A.push(A[A.length-1] + 0.5*cross(d1,d2));
+  }
+  const total = A[m-1];
+  let tr = targetRight;
+  if (!(0<tr && tr<total)) tr = Math.min(Math.max(tr, total*1e-12), total*(1-1e-12));
+  let lo=1, hi=m-1;
+  while(hi-lo>1){ const mid=(lo+hi)>>1; if(A[mid]<=tr) lo=mid; else hi=mid; }
+  const j=lo;
+  const Vj=V[j], Vj1=V[j+1], edge=sub(Vj1,Vj), d=sub(Vj,V0);
+  const twice = cross(d, edge);
+  let t = Math.abs(twice)<1e-15 ? 0 : (tr - A[j])/(0.5*twice);
+  t = Math.max(0, Math.min(1, t));
+  const ep = [Vj[0]+t*edge[0], Vj[1]+t*edge[1]];
+  const right = [V0].concat(V.slice(1,j+1)).concat([ep]);
+  const left  = [V0, ep].concat(V.slice(j+1));
+  return {ep, right, left};
+}
+function labelOf(n, choices){
+  let s = 'n='+n;
+  if (choices.length) s += '  ['+choices.map(c=>c?'R':'L').join('')+']';
+  return s;
+}
+function runSequential(n, choices){
+  const C = makeCircle();
+  const T = polyArea(C)/n;
+  const sections=[], cuts=[];
+  let remaining=C, curPt=[1,0];
+  const apply = (target, takeRight) => {
+    const {ep,right,left} = solveCut(remaining, curPt, target);
+    sections.push(takeRight?right:left);
+    cuts.push([curPt, ep]);
+    remaining = takeRight?left:right;
+    curPt = ep;
+  };
+  if (n<2){ sections.push(remaining); return {sections, cuts, label:labelOf(n,choices)}; }
+  apply(T, true);                                   // cut 1 (forced right)
+  for (const r of choices) apply(r?T:(polyArea(remaining)-T), r);   // middle cuts
+  if (n>=3){                                        // last cut → T + T
+    const {ep,right,left} = solveCut(remaining, curPt, T);
+    cuts.push([curPt, ep]); sections.push(right); sections.push(left);
+  } else {
+    sections.push(remaining);                       // n==2: leftover is the 2nd half
+  }
+  return {sections, cuts, label:labelOf(n,choices)};
+}
+
+// ── choice-string shorthand expander (ports _expand_choices) ────────────────
+function expandChoices(str){
+  const s = str.toUpperCase();
+  let out='', i=0;
+  while(i<s.length){
+    if(s[i]==='('){
+      const j=s.indexOf(')', i);
+      if(j<0) break;
+      const group=s.slice(i+1, j); i=j+1;
+      const mm=/^\d+/.exec(s.slice(i)); const cnt=mm?parseInt(mm[0],10):1; if(mm) i+=mm[0].length;
+      out += group.repeat(cnt);
+    } else if(s[i]==='R'||s[i]==='L'){
+      const letter=s[i]; i++;
+      const mm=/^\d+/.exec(s.slice(i)); const cnt=mm?parseInt(mm[0],10):1; if(mm) i+=mm[0].length;
+      out += letter.repeat(cnt);
+    } else i++;
+  }
+  return out.replace(/[^RL]/g,'');
+}
+// seeded RNG + sequence enumeration / sampling
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function allSeqs(n){
+  const k=Math.max(0,n-3), out=[];
+  for(let bits=0; bits<(1<<k); bits++){
+    const seq=[]; for(let i=0;i<k;i++) seq.push(((bits>>(k-1-i))&1)===1);
+    out.push(seq);
+  }
+  return out;
+}
+function sampleSeqs(n, k, rng){
+  const L=Math.max(0,n-3), count=Math.pow(2,L);
+  if(L===0) return [[]];
+  if(k>=count) return allSeqs(n);
+  const seen=new Set(), out=[];
+  let guard=0;
+  while(out.length<k && guard<k*40){
+    guard++;
+    let key='', seq=[];
+    for(let i=0;i<L;i++){ const b=rng()<0.5; seq.push(b); key+=b?'1':'0'; }
+    if(!seen.has(key)){ seen.add(key); out.push(seq); }
+  }
+  return out;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  RENDERING — SVG cells (260×290 each), shared by display + export
+// ════════════════════════════════════════════════════════════════════════════
+const CELL_W=260, CELL_H=290, CX=130, CY=160, RAD=110;
+const map = (p, ox, oy) => [ (ox+CX+RAD*p[0]).toFixed(2), (oy+CY-RAD*p[1]).toFixed(2) ];
+function polyPath(pts, ox, oy){
+  let d='';
+  for(let i=0;i<pts.length;i++){ const m=map(pts[i],ox,oy); d += (i?' L':'M')+m[0]+' '+m[1]; }
+  return d+' Z';
+}
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function renderCell(res, opts, ox, oy){
+  let s='';
+  s += `<text x="${ox+CX}" y="${oy+18}" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="13" fill="${EDGE}">${esc(res.label)}</text>`;
+  if(opts.shading){
+    res.sections.forEach((pts,i)=>{
+      s += `<path d="${polyPath(pts,ox,oy)}" fill="${PALETTE[i%PALETTE.length]}" fill-opacity="0.92" stroke="${EDGE}" stroke-width="1.4"/>`;
+    });
+  }
+  if(opts.circle){
+    s += `<circle cx="${ox+CX}" cy="${oy+CY}" r="${RAD}" fill="none" stroke="${EDGE}" stroke-width="1.4"/>`;
+  }
+  res.cuts.forEach(([p1,p2])=>{
+    const a=map(p1,ox,oy), b=map(p2,ox,oy);
+    s += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${EDGE}" stroke-width="2"/>`;
+  });
+  if(opts.labels){
+    res.sections.forEach((pts,i)=>{
+      const m=map(centroid(pts),ox,oy);
+      s += `<text x="${m[0]}" y="${m[1]}" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="700" fill="${EDGE}">${i+1}</text>`;
+    });
+  }
+  return s;
+}
+function cellSVG(res, opts){
+  return `<svg viewBox="0 0 ${CELL_W} ${CELL_H}" xmlns="http://www.w3.org/2000/svg">${renderCell(res,opts,0,0)}</svg>`;
+}
+function compositeSVG(results, opts){
+  const cols = Math.min(4, results.length) || 1;
+  const rows = Math.ceil(results.length/cols);
+  const W=cols*CELL_W, H=rows*CELL_H;
+  let body = `<rect width="${W}" height="${H}" fill="#F0F0F0"/>`;
+  results.forEach((res,i)=>{
+    const c=i%cols, r=(i/cols)|0;
+    body += renderCell(res, opts, c*CELL_W, r*CELL_H);
+  });
+  return { svg:`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${body}</svg>`, W, H };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  UI WIRING
+// ════════════════════════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+let currentResults=[], currentOpts={shading:true,labels:true,circle:true};
+const CAP = 200;
+
+function readOpts(){
+  return { shading:$('optShading').checked, labels:$('optLabels').checked, circle:$('optCircle').checked };
+}
+function buildConfigList(){
+  const choicesRaw = $('choicesInput').value.trim();
+  if(choicesRaw){
+    const parts = choicesRaw.split(/[\s,]+/).filter(Boolean);
+    const list = parts.map(p=>{ const exp=expandChoices(p); const n=exp.length+3;
+                                return {n, choices:[...exp].map(c=>c==='R')}; })
+                       .filter(c=>c.n>=2);
+    return { list, warn:null, title:'Choices: '+esc(parts.join(', ')) };
+  }
+  const nvals = $('nInput').value.trim().split(/[\s,]+/).filter(Boolean)
+                  .map(Number).filter(x=>Number.isFinite(x)&&x>=2 && x<=2000);
+  const sampleV = parseInt($('sampleInput').value,10);
+  const seedV = parseInt($('seedInput').value,10);
+  const rng = mulberry32(Number.isFinite(seedV) ? seedV : (Math.random()*2**31|0));
+  let list=[], warn=null;
+  for(const n of nvals){
+    const k=Math.max(0,n-3), count=Math.pow(2,k);
+    let seqs;
+    if(Number.isFinite(sampleV) && sampleV>0 && sampleV<count){
+      seqs = sampleSeqs(n, sampleV, rng);
+    } else if(count<=CAP){
+      seqs = allSeqs(n);
+    } else {
+      seqs = sampleSeqs(n, CAP, rng);
+      warn = `n=${n} has ${count.toLocaleString()} configurations — showing ${CAP} random. Use Sample or Choices to refine.`;
+    }
+    for(const s of seqs) list.push({n, choices:s});
+  }
+  const title = nvals.length ? ('n = '+nvals.join(', ')) : '—';
+  return { list, warn, title };
+}
+function generate(){
+  const { list, warn, title } = buildConfigList();
+  const opts = readOpts();
+  currentOpts = opts;
+  const grid = $('grid');
+  grid.innerHTML='';
+  currentResults=[];
+  if(!list.length){
+    grid.innerHTML='<div class="empty">No valid configurations. Check your n / choices input.</div>';
+    $('resTitle').innerHTML='<strong>—</strong>'; $('resCount').textContent='';
+    $('warn').classList.remove('show'); return;
+  }
+  document.documentElement.style.setProperty('--cardmin', (parseInt($('cardSize').value,10)||230)+'px');
+  const frag=document.createDocumentFragment();
+  for(const cfg of list){
+    let res;
+    try { res = runSequential(cfg.n, cfg.choices); }
+    catch(e){ continue; }
+    currentResults.push(res);
+    const card=document.createElement('div');
+    card.className='card';
+    card.innerHTML=cellSVG(res, opts);
+    frag.appendChild(card);
+  }
+  grid.appendChild(frag);
+  $('resTitle').innerHTML='<strong>'+title+'</strong>';
+  $('resCount').textContent = currentResults.length+' configuration'+(currentResults.length===1?'':'s');
+  const w=$('warn');
+  if(warn){ w.textContent=warn; w.classList.add('show'); } else w.classList.remove('show');
+}
+
+// ── export ──────────────────────────────────────────────────────────────────
+function filename(){
+  let f=($('fnameInput').value||'circle_cuttings').trim().replace(/[\\/:*?"<>|]+/g,'_');
+  return f || 'circle_cuttings';
+}
+async function saveBlob(blob, name){
+  if(window.showSaveFilePicker){
+    const ext=name.split('.').pop();
+    try{
+      const handle=await window.showSaveFilePicker({ suggestedName:name,
+        types:[{ description:ext.toUpperCase()+' file', accept:{ [blob.type]:['.'+ext] } }] });
+      const w=await handle.createWritable(); await w.write(blob); await w.close(); return;
+    }catch(e){ if(e.name==='AbortError') return; /* else fall back */ }
+  }
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 1500);
+}
+function downloadSVG(){
+  if(!currentResults.length){ alert('Generate diagrams first.'); return; }
+  const { svg } = compositeSVG(currentResults, currentOpts);
+  saveBlob(new Blob([svg], {type:'image/svg+xml'}), filename()+'.svg');
+}
+function downloadPNG(){
+  if(!currentResults.length){ alert('Generate diagrams first.'); return; }
+  const { svg, W, H } = compositeSVG(currentResults, currentOpts);
+  const scale=Math.max(1, Math.min(6, parseInt($('scaleInput').value,10)||2));
+  const url=URL.createObjectURL(new Blob([svg], {type:'image/svg+xml'}));
+  const img=new Image();
+  img.onload=()=>{
+    const cv=document.createElement('canvas'); cv.width=Math.round(W*scale); cv.height=Math.round(H*scale);
+    const ctx=cv.getContext('2d'); ctx.scale(scale,scale); ctx.drawImage(img,0,0);
+    URL.revokeObjectURL(url);
+    cv.toBlob(b=>saveBlob(b, filename()+'.png'), 'image/png');
+  };
+  img.onerror=()=>{ URL.revokeObjectURL(url); alert('PNG render failed.'); };
+  img.src=url;
+}
+
+$('genBtn').addEventListener('click', generate);
+$('pngBtn').addEventListener('click', downloadPNG);
+$('svgBtn').addEventListener('click', downloadSVG);
+// live re-render on display toggles (cheap — reuses cached results)
+['optShading','optLabels','optCircle','cardSize'].forEach(id=>{
+  $(id).addEventListener('change', ()=>{ if(currentResults.length) rerender(); });
+});
+function rerender(){
+  currentOpts=readOpts();
+  document.documentElement.style.setProperty('--cardmin', (parseInt($('cardSize').value,10)||230)+'px');
+  const grid=$('grid'); grid.innerHTML='';
+  const frag=document.createDocumentFragment();
+  for(const res of currentResults){
+    const card=document.createElement('div'); card.className='card';
+    card.innerHTML=cellSVG(res, currentOpts); frag.appendChild(card);
+  }
+  grid.appendChild(frag);
+}
+// allow Enter in text inputs to trigger generate
+['nInput','choicesInput','sampleInput','seedInput'].forEach(id=>{
+  $(id).addEventListener('keydown', e=>{ if(e.key==='Enter') generate(); });
+});
+
+generate();   // initial render
+</script>
+</body>
+</html>
